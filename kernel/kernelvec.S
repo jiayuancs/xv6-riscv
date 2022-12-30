@@ -98,24 +98,30 @@ timervec:
         # scratch[24] : address of CLINT's MTIMECMP register.
         # scratch[32] : desired interval between interrupts.
         
+        # csrrw是原子操作：将mscratch读出，进行零扩展，写入到a0，将a0写入到mscratch
+        # 即交换a0与mscratch的值
         csrrw a0, mscratch, a0
+        # 保存a1,a2,a3寄存器内容
         sd a1, 0(a0)
         sd a2, 8(a0)
         sd a3, 16(a0)
 
         # schedule the next timer interrupt
         # by adding interval to mtimecmp.
-        ld a1, 24(a0) # CLINT_MTIMECMP(hart)
-        ld a2, 32(a0) # interval
-        ld a3, 0(a1)
-        add a3, a3, a2
-        sd a3, 0(a1)
+        ld a1, 24(a0) # CLINT_MTIMECMP(hart) mtimecmp寄存器的地址
+        ld a2, 32(a0) # interval 时间间隔
+        ld a3, 0(a1)  # 读mtimecmp寄存器内容
+        add a3, a3, a2  # 加上时间间隔
+        sd a3, 0(a1)    # 写回mtimecmp寄存器
 
         # arrange for a supervisor software interrupt
         # after this handler returns.
+        # 将sip.SSIP(supervisor software interrupt pending)字段置1
+        # 表示S模式下有软中断等待处理
         li a1, 2
         csrw sip, a1
 
+        // 恢复a0,a1,a2,a3寄存器
         ld a3, 16(a0)
         ld a2, 8(a0)
         ld a1, 0(a0)
