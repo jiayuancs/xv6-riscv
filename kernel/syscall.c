@@ -30,6 +30,7 @@ fetchstr(uint64 addr, char *buf, int max)
   return strlen(buf);
 }
 
+// 所以xv6的系统调用参数个数最多是6个
 static uint64
 argraw(int n)
 {
@@ -134,10 +135,12 @@ syscall(void)
   int num;
   struct proc *p = myproc();
 
+  // a7寄存器保存了系统调用号
   num = p->trapframe->a7;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
     // Use num to lookup the system call function for num, call it,
     // and store its return value in p->trapframe->a0
+    // 执行系统调用，将返回值保存到a0中
     p->trapframe->a0 = syscalls[num]();
   } else {
     printf("%d %s: unknown sys call %d\n",

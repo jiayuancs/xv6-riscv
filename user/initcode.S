@@ -6,6 +6,8 @@
 # exec(init, argv)
 .globl start
 start:
+        # a0保存第一个参数，a1保存第二个参数
+        # a7保存系统调用号
         la a0, init
         la a1, argv
         li a7, SYS_exec

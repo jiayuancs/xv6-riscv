@@ -13,6 +13,7 @@ kernelvec:
         # make room to save registers.
         addi sp, sp, -256
 
+        # 将通用寄存器保存到栈上
         # save the registers.
         sd ra, 0(sp)
         sd sp, 8(sp)

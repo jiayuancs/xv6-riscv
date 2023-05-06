@@ -162,11 +162,13 @@ kerneltrap()
   }
 
   // give up the CPU if this is a timer interrupt.
+  // 这里需要判断进程是否是RUNNING的（即不是调度程序线程）
   if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
     yield();
 
   // the yield() may have caused some traps to occur,
   // so restore trap registers for use by kernelvec.S's sepc instruction.
+  // TODO: yield()可能会破坏保存的sepc和sstatus中保存的前一个状态模式，所以需要恢复?
   w_sepc(sepc);
   w_sstatus(sstatus);
 }
