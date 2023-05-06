@@ -353,6 +353,7 @@ typedef uint64 *pagetable_t; // 512 PTEs
 // 物理页首地址高44位是PPN，页面4KB对齐，因此物理地址低12位是0
 #define PTE2PA(pte) (((pte) >> 10) << 12)
 
+// 页表项PTE中的标志位
 #define PTE_FLAGS(pte) ((pte) & 0x3FF)
 
 // extract the three 9-bit page table indices from a virtual address.

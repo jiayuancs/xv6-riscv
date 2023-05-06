@@ -9,9 +9,20 @@
         # kernel.ld causes this code to start at 
         # a page boundary.
         #
+        # 完成上下文的切换过程，将用户态的寄存器保存到trapframe中，将内核态的寄存器保存到内核栈中
 
 #include "riscv.h"
 #include "memlayout.h"
+
+# 用户模式下trap发生后：
+# 1. 中断被禁用
+# 2. pc（当前指令或下条指令地址）被保存到sepc中
+# 3. 当前的特权级到sstatus.SPP中
+# 4. scause中保存了trap的原因号
+# 5. 切换到supervisor模式
+# 6. 跳转到stvec中指向的地址开始执行，即这里的uservec
+
+# 因此，从这里开始就已经运行在supervisor模式下了，但使用的还是用户进程的页表
 
 .section trampsec
 .globl trampoline
@@ -28,14 +39,18 @@ uservec:
 
         # save user a0 in sscratch so
         # a0 can be used to get at TRAPFRAME.
+        // 因为后面要用到a0，所以将a0的值保存到sscratch中
         csrw sscratch, a0
 
         # each process has a separate p->trapframe memory area,
         # but it's mapped to the same virtual address
         # (TRAPFRAME) in every process's user page table.
+        # TRAPFRAME定义在memlayout.h中，是一个页的起始地址，
+        # 紧挨着TRAMPOLINE页
         li a0, TRAPFRAME
         
         # save the user registers in TRAPFRAME
+        // 保存31个通用寄存器（x0不需要被保存）
         sd ra, 40(a0)
         sd sp, 48(a0)
         sd gp, 56(a0)
@@ -45,6 +60,7 @@ uservec:
         sd t2, 88(a0)
         sd s0, 96(a0)
         sd s1, 104(a0)
+        // a0的值被覆盖了，后面单独进行保存 //
         sd a1, 120(a0)
         sd a2, 128(a0)
         sd a3, 136(a0)
@@ -75,6 +91,7 @@ uservec:
         ld sp, 8(a0)
 
         # make tp hold the current hartid, from p->trapframe->kernel_hartid
+        # tp: thread pointer
         ld tp, 32(a0)
 
         # load the address of usertrap(), from p->trapframe->kernel_trap
@@ -89,6 +106,7 @@ uservec:
         sfence.vma zero, zero
 
         # install the kernel page table.
+        # 使用内核页表
         csrw satp, t1
 
         # flush now-stale user entries from the TLB.

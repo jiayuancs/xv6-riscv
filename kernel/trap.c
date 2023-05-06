@@ -9,6 +9,7 @@
 struct spinlock tickslock;
 uint ticks;
 
+// 定义在trampoline.S中
 extern char trampoline[], uservec[], userret[];
 
 // in kernelvec.S, calls kerneltrap().
@@ -43,6 +44,8 @@ usertrap(void)
 
   // send interrupts and exceptions to kerneltrap(),
   // since we're now in the kernel.
+  // 如果是系统调用，后面会启用中断，所以这里要设置内核的中断向量
+  // 以便处理内核产生的中断
   w_stvec((uint64)kernelvec);
 
   struct proc *p = myproc();
@@ -50,6 +53,8 @@ usertrap(void)
   // save user program counter.
   p->trapframe->epc = r_sepc();
   
+  // scause=8，即最高位是0，表示这是exception，而不是interrupt
+  // Exception Code=0，表示是Environment call from U-mode
   if(r_scause() == 8){
     // system call
 
@@ -58,10 +63,14 @@ usertrap(void)
 
     // sepc points to the ecall instruction,
     // but we want to return to the next instruction.
+    // 系统调用属于异常，CPU将发生异常的那条指令地址放到sepc
+    // 所以这里要将sepc加4，指向下一条指令，以避免死循环
     p->trapframe->epc += 4;
 
     // an interrupt will change sepc, scause, and sstatus,
     // so enable only now that we're done with those registers.
+    // trap发生时会自动关中断，这里后续要进行系统调用，可能依赖中断，
+    // 比如以中断方式读写文件等，所以要开中断
     intr_on();
 
     syscall();
@@ -97,6 +106,7 @@ usertrapret(void)
   intr_off();
 
   // send syscalls, interrupts, and exceptions to uservec in trampoline.S
+  // 这里(uservec - trampoline)=0，详见trampoline.S文件
   uint64 trampoline_uservec = TRAMPOLINE + (uservec - trampoline);
   w_stvec(trampoline_uservec);
 
@@ -125,6 +135,7 @@ usertrapret(void)
   // jump to userret in trampoline.S at the top of memory, which 
   // switches to the user page table, restores user registers,
   // and switches to user mode with sret.
+  // 函数调用的第一个参数被保存到a0寄存器中，这里将satp作为参数传递给userret
   uint64 trampoline_userret = TRAMPOLINE + (userret - trampoline);
   ((void (*)(uint64))trampoline_userret)(satp);
 }

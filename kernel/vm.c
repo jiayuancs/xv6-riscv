@@ -11,6 +11,7 @@
  */
 pagetable_t kernel_pagetable;
 
+// 内核.text section的末尾地址，由链接脚本设置
 extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
@@ -203,12 +204,15 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       panic("uvmunmap: walk");
     if((*pte & PTE_V) == 0)
       panic("uvmunmap: not mapped");
+    // TODO: 为什么要判断是否是leaf？难道可能不是leaf吗？
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
-    if(do_free){
+    if(do_free){ // 释放掉物理内存，即将该页添加到空闲页链表中
       uint64 pa = PTE2PA(*pte);
       kfree((void*)pa);
     }
+
+    // 清空页表项，完成unmap
     *pte = 0;
   }
 }
@@ -229,6 +233,7 @@ uvmcreate()
 // Load the user initcode into address 0 of pagetable,
 // for the very first process.
 // sz must be less than a page.
+// 将initcode加载到用户模式下的虚拟地址0处
 void
 uvmfirst(pagetable_t pagetable, uchar *src, uint sz)
 {
@@ -244,6 +249,7 @@ uvmfirst(pagetable_t pagetable, uchar *src, uint sz)
 
 // Allocate PTEs and physical memory to grow process from oldsz to
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
+// 为进程分配物理内存，从oldsz增长到newsz
 uint64
 uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
 {
@@ -257,6 +263,7 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
   for(a = oldsz; a < newsz; a += PGSIZE){
     mem = kalloc();
     if(mem == 0){
+      // 如果分配的过程中有一页分配失败，则把分配到的页都释放掉
       uvmdealloc(pagetable, a, oldsz);
       return 0;
     }
@@ -274,12 +281,16 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
 // newsz.  oldsz and newsz need not be page-aligned, nor does newsz
 // need to be less than oldsz.  oldsz can be larger than the actual
 // process size.  Returns the new process size.
+// 释放用户页面，使进程大小从oldsz变为newsz。
+// oldsz和newsz不需要对齐页面，newsz也不需要小于oldsz。
+// oldsz可以大于实际进程大小。返回新的进程大小。
 uint64
 uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 {
   if(newsz >= oldsz)
     return oldsz;
 
+  // 把进程多余的页面释放掉
   if(PGROUNDUP(newsz) < PGROUNDUP(oldsz)){
     int npages = (PGROUNDUP(oldsz) - PGROUNDUP(newsz)) / PGSIZE;
     uvmunmap(pagetable, PGROUNDUP(newsz), npages, 1);
@@ -290,6 +301,8 @@ uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 
 // Recursively free page-table pages.
 // All leaf mappings must already have been removed.
+// 递归地释放掉存放页表的页面（释放非叶子节点）
+// 要求所有叶映射必须已经被删除（即所有叶子都被删除）
 void
 freewalk(pagetable_t pagetable)
 {
@@ -324,6 +337,7 @@ uvmfree(pagetable_t pagetable, uint64 sz)
 // physical memory.
 // returns 0 on success, -1 on failure.
 // frees any allocated pages on failure.
+// 将页表old复制到页表new（new是空的页表）
 int
 uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
@@ -361,10 +375,12 @@ uvmclear(pagetable_t pagetable, uint64 va)
 {
   pte_t *pte;
   
+  // TODO: 这里walk的第三个参数alloc为什么不是1？
+  // 不应该如果没有的话就分配一个吗？
   pte = walk(pagetable, va, 0);
   if(pte == 0)
     panic("uvmclear");
-  *pte &= ~PTE_U;
+  *pte &= ~PTE_U;  // 设置用户模式不可访问
 }
 
 // Copy from kernel to user.
@@ -427,6 +443,7 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 // Copy bytes to dst from virtual address srcva in a given page table,
 // until a '\0', or max.
 // Return 0 on success, -1 on error.
+// 将字符串从用户空间（虚拟地址）拷贝到内核空间（物理地址）
 int
 copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 {
