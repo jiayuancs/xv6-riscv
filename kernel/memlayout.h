@@ -53,6 +53,7 @@
 
 // map kernel stacks beneath the trampoline,
 // each surrounded by invalid guard pages.
+// 每个进程的内核栈仅占1页，并仅挨一页guard page(即未被映射的页)
 #define KSTACK(p) (TRAMPOLINE - ((p)+1)* 2*PGSIZE)
 
 // User memory layout.

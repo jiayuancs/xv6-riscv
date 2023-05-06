@@ -335,6 +335,7 @@ typedef uint64 *pagetable_t; // 512 PTEs
 #define PGSIZE 4096 // bytes per page
 #define PGSHIFT 12  // bits of offset within a page
 
+// 向上或向下对齐到页边界
 #define PGROUNDUP(sz)  (((sz)+PGSIZE-1) & ~(PGSIZE-1))
 #define PGROUNDDOWN(a) (((a)) & ~(PGSIZE-1))
 
@@ -347,6 +348,9 @@ typedef uint64 *pagetable_t; // 512 PTEs
 // shift a physical address to the right place for a PTE.
 #define PA2PTE(pa) ((((uint64)pa) >> 12) << 10)
 
+// 从页表项PTE中获取物理页首地址
+// PTE: Page Table Entries, 共64位, 高10位保留, 中44位是PPN(Physical Page Number), 低10位是标志位
+// 物理页首地址高44位是PPN，页面4KB对齐，因此物理地址低12位是0
 #define PTE2PA(pte) (((pte) >> 10) << 12)
 
 #define PTE_FLAGS(pte) ((pte) & 0x3FF)
