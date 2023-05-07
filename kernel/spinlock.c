@@ -21,7 +21,12 @@ initlock(struct spinlock *lk, char *name)
 void
 acquire(struct spinlock *lk)
 {
+  // 6.5节：如果一个自旋锁被中断处理程序所使用，那么CPU必须保证在启用中断的情况下永远不能持有该锁。
+  // Xv6更保守：当CPU获取任何锁时，xv6总是禁用该CPU上的中断。中断仍然可能发生在其他CPU上，
+  // 此时中断的acquire可以等待线程释放自旋锁；由于不在同一CPU上，不会造成死锁。
   push_off(); // disable interrupts to avoid deadlock.
+
+  // 如果获取锁了，则再获取该锁会panic
   if(holding(lk))
     panic("acquire");
 
@@ -46,6 +51,7 @@ acquire(struct spinlock *lk)
 void
 release(struct spinlock *lk)
 {
+  // 如果没有获取到锁就开始释放，则panic
   if(!holding(lk))
     panic("release");
 
@@ -85,14 +91,21 @@ holding(struct spinlock *lk)
 // it takes two pop_off()s to undo two push_off()s.  Also, if interrupts
 // are initially off, then push_off, pop_off leaves them off.
 
+// 由于自旋锁可以多层嵌套，因此需要记录嵌套的层数，push_off用于增加1层,关闭中断
+// pop_off用于减少1层，当层数为0时开启中断
+
 void
 push_off(void)
 {
   int old = intr_get();
 
   intr_off();
+
+  // 加第一层锁之时，记录之前的中断状态，方便后续恢复
   if(mycpu()->noff == 0)
     mycpu()->intena = old;
+  
+  // 层数++
   mycpu()->noff += 1;
 }
 
@@ -104,6 +117,8 @@ pop_off(void)
     panic("pop_off - interruptible");
   if(c->noff < 1)
     panic("pop_off");
+
+  // 层数--，待减到0时，将中断恢复到之前的状态（c->intena)
   c->noff -= 1;
   if(c->noff == 0 && c->intena)
     intr_on();

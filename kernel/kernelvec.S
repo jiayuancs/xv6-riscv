@@ -94,6 +94,10 @@ kernelvec:
 .globl timervec
 .align 4
 timervec:
+        # 机器模式下执行
+        # 时钟中断可能在任何时候发生，内核无法在临界区操作期间禁用时钟中断，
+        # 因此，时钟中断处理程序将触发一个软中断，然后立即返回。
+        # 内核可以决定是否屏蔽这个软中断
         # start.c has set up the memory that mscratch points to:
         # scratch[0,8,16] : register save area.
         # scratch[24] : address of CLINT's MTIMECMP register.

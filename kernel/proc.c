@@ -142,6 +142,7 @@ found:
 
   // Set up new context to start executing at forkret,
   // which returns to user space.
+  // 进程上下文的ra寄存器设置为forkret，因此，进程首次执行时会先执行forkret函数
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
@@ -486,6 +487,8 @@ sched(void)
 
   if(!holding(&p->lock))
     panic("sched p->lock");
+  
+  // 确保释放它持有的任何其他锁（当前锁的深度是1，即调用sched前刚申请的锁）
   if(mycpu()->noff != 1)
     panic("sched locks");
   if(p->state == RUNNING)
@@ -494,6 +497,9 @@ sched(void)
     panic("sched interruptible");
 
   intena = mycpu()->intena;
+  // mycpu()->context保存的是调度程序的上下文
+  // swtch将返回到调度程序上下文中的ra保存的位置处执行
+  // 即返回到scheduler函数中的swtch的下条指令
   swtch(&p->context, &mycpu()->context);
   mycpu()->intena = intena;
 }
@@ -511,6 +517,8 @@ yield(void)
 
 // A fork child's very first scheduling by scheduler()
 // will swtch to forkret.
+// 只有进程被第一创建运行时才会执行该函数（allocproc函数中将进程上下文中的ra寄存器设置为forkret的地址）
+// 之后进程的ra寄存器保存的是函数调用的返回地址，因此不会再次执行forkret
 void
 forkret(void)
 {
