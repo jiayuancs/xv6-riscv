@@ -15,6 +15,7 @@
 #define static_assert(a, b) do { switch (0) case 0: case (a): ; } while (0)
 #endif
 
+// inode的数量为200，所以xv6能够使用的文件数量最大为200
 #define NINODES 200
 
 // Disk layout:

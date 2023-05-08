@@ -212,6 +212,8 @@ alloc3_desc(int *idx)
   return 0;
 }
 
+// 缓冲区buf中记录了设备和块号
+// 将磁盘的数据读取到缓冲区中（write=0），或将缓冲区中的数据写到磁盘（write!=0）
 void
 virtio_disk_rw(struct buf *b, int write)
 {

@@ -41,6 +41,7 @@ binit(void)
   initlock(&bcache.lock, "bcache");
 
   // Create linked list of buffers
+  // 使用头插法构建循环双链表
   bcache.head.prev = &bcache.head;
   bcache.head.next = &bcache.head;
   for(b = bcache.buf; b < bcache.buf+NBUF; b++){
@@ -74,17 +75,20 @@ bget(uint dev, uint blockno)
 
   // Not cached.
   // Recycle the least recently used (LRU) unused buffer.
+  // brelse会将最近使用过（释放掉）缓冲区放到链表首部，
+  // 所以尾部是最近不常用的缓冲区，从而实现LRU
   for(b = bcache.head.prev; b != &bcache.head; b = b->prev){
     if(b->refcnt == 0) {
       b->dev = dev;
       b->blockno = blockno;
       b->valid = 0;
       b->refcnt = 1;
-      release(&bcache.lock);
+      release(&bcache.lock);  // 这里先释放bcache.lock再获取b->lock是安全的，因为b->refcnt已经被置为非0了，所以该块不会被重复分配
       acquiresleep(&b->lock);
       return b;
     }
   }
+  // 如果所有缓冲区都处于忙碌，那么太多进程同时执行文件系统调用时，bget将会panic
   panic("bget: no buffers");
 }
 
@@ -113,6 +117,7 @@ bwrite(struct buf *b)
 
 // Release a locked buffer.
 // Move to the head of the most-recently-used list.
+// brelse是b-release的缩写
 void
 brelse(struct buf *b)
 {
@@ -125,6 +130,9 @@ brelse(struct buf *b)
   b->refcnt--;
   if (b->refcnt == 0) {
     // no one is waiting for it.
+    // 将b放在双链表头部，实现LRU
+    // 缓冲区b被释放了，说明它刚被使用，应该放到最前面
+    // 越靠前表示最近使用，越靠后表示最久未使用
     b->next->prev = b->prev;
     b->prev->next = b->next;
     b->next = bcache.head.next;
@@ -136,6 +144,7 @@ brelse(struct buf *b)
   release(&bcache.lock);
 }
 
+// b-pin表示在bcache中固定住这个block，不允许被换出（增加了引用计数）
 void
 bpin(struct buf *b) {
   acquire(&bcache.lock);
@@ -143,6 +152,7 @@ bpin(struct buf *b) {
   release(&bcache.lock);
 }
 
+// 取消固定，允许被换出
 void
 bunpin(struct buf *b) {
   acquire(&bcache.lock);

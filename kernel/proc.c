@@ -527,6 +527,7 @@ forkret(void)
   // Still holding p->lock from scheduler.
   release(&myproc()->lock);
 
+  // forkret只在第一次执行时（init进程）读取文件系统
   if (first) {
     // File system initialization must be run in the context of a
     // regular process (e.g., because it calls sleep), and thus cannot

@@ -72,7 +72,7 @@ install_trans(int recovering)
 
   for (tail = 0; tail < log.lh.n; tail++) {
     struct buf *lbuf = bread(log.dev, log.start+tail+1); // read log block
-    struct buf *dbuf = bread(log.dev, log.lh.block[tail]); // read dst
+    struct buf *dbuf = bread(log.dev, log.lh.block[tail]); // read dst 这个读操作其实是不必要的
     memmove(dbuf->data, lbuf->data, BSIZE);  // copy block to dst
     bwrite(dbuf);  // write dst to disk
     if(recovering == 0)
@@ -131,6 +131,7 @@ begin_op(void)
     if(log.committing){
       sleep(&log, &log.lock);
     } else if(log.lh.n + (log.outstanding+1)*MAXOPBLOCKS > LOGSIZE){
+      // 限制并发的数量，以避免用尽log块
       // this op might exhaust log space; wait for commit.
       sleep(&log, &log.lock);
     } else {
@@ -217,6 +218,8 @@ log_write(struct buf *b)
   int i;
 
   acquire(&log.lock);
+  // 磁盘上共有30个log块[2, 32)，其中块号2存放log header，块号[3, 32)是存放写入磁盘的数据
+  // 因此，每个事务最多只能写29块数据，否则磁盘的log区装不下
   if (log.lh.n >= LOGSIZE || log.lh.n >= log.size - 1)
     panic("too big a transaction");
   if (log.outstanding < 1)
@@ -227,6 +230,12 @@ log_write(struct buf *b)
       break;
   }
   log.lh.block[i] = b->blockno;
+
+  // cache eviction(cache驱逐)问题
+  // log.lh中只记录了事务中修改的块号，但是并没有记录修改的内容
+  // 修改的内容是保存在内存中的磁盘块cache中的（即bcache中的buf），如果cache中的块被驱逐了，那么就无法恢复了
+  // 因此需要增加磁盘块缓存的引用计数，避免该块被驱逐
+  // （bcache中的磁盘块数一定要大于log块数，否则没法pin住所有的log块）
   if (i == log.lh.n) {  // Add new block to log?
     bpin(b);
     log.lh.n++;

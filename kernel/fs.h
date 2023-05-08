@@ -35,6 +35,7 @@ struct dinode {
   short minor;          // Minor device number (T_DEVICE only)
   short nlink;          // Number of links to inode in file system
   uint size;            // Size of file (bytes)
+  // 包含NDIRECT个直接块，1个间接块
   uint addrs[NDIRECT+1];   // Data block addresses
 };
 
@@ -53,8 +54,12 @@ struct dinode {
 // Directory is a file containing a sequence of dirent structures.
 #define DIRSIZ 14
 
+// 目录项
+// xv6的文件系统中，磁盘上的每个inode占用64B，共有13个inode磁盘块，每块大小为1KB
+// 因此，最多只能容纳13KB / 64B = 208个inode
+// xv6将inode的数量设置为200，所以ushort足够了
 struct dirent {
-  ushort inum;
-  char name[DIRSIZ];
+  ushort inum;        // 文件对应的inode号
+  char name[DIRSIZ];  // 文件名字，最大长度为DIRSIZ
 };
 
