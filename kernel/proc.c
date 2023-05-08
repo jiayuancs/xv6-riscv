@@ -598,7 +598,7 @@ kill(int pid)
   for(p = proc; p < &proc[NPROC]; p++){
     acquire(&p->lock);
     if(p->pid == pid){
-      p->killed = 1;
+      p->killed = 1;  // 一旦该进程下次被调度，就会执行usertrap，usertrap会执行exit函数
       if(p->state == SLEEPING){
         // Wake process from sleep().
         p->state = RUNNABLE;

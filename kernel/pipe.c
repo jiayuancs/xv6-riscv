@@ -12,7 +12,7 @@
 
 struct pipe {
   struct spinlock lock;
-  char data[PIPESIZE];
+  char data[PIPESIZE];  // 环形缓冲区
   uint nread;     // number of bytes read
   uint nwrite;    // number of bytes written
   int readopen;   // read fd is still open
@@ -73,6 +73,7 @@ pipeclose(struct pipe *pi, int writable)
     release(&pi->lock);
 }
 
+// 向管道中写入n字节数据，如果写的过程中缓冲区满了，则唤醒休眠的读进程，休眠写进程
 int
 pipewrite(struct pipe *pi, uint64 addr, int n)
 {
@@ -85,6 +86,7 @@ pipewrite(struct pipe *pi, uint64 addr, int n)
       release(&pi->lock);
       return -1;
     }
+    // 环形缓冲区被填满了，则唤醒读进程
     if(pi->nwrite == pi->nread + PIPESIZE){ //DOC: pipewrite-full
       wakeup(&pi->nread);
       sleep(&pi->nwrite, &pi->lock);
@@ -102,6 +104,8 @@ pipewrite(struct pipe *pi, uint64 addr, int n)
   return i;
 }
 
+// 从管道中读n字节数据，如果缓冲区为空，则休眠读进程
+// 读取结束后，唤醒休眠的写进程
 int
 piperead(struct pipe *pi, uint64 addr, int n)
 {
@@ -110,6 +114,7 @@ piperead(struct pipe *pi, uint64 addr, int n)
   char ch;
 
   acquire(&pi->lock);
+  // 如果缓冲区为空，且写端口没有被关闭，则休眠
   while(pi->nread == pi->nwrite && pi->writeopen){  //DOC: pipe-empty
     if(killed(pr)){
       release(&pi->lock);
